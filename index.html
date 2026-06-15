@@ -843,6 +843,7 @@
         <div class="stat-row"><span class="stat-label">Défaites</span><span class="stat-value" id="stat-dan-losses">0</span></div>
         <div class="stat-row"><span class="stat-label">Skunks infligés</span><span class="stat-value" id="stat-dan-skunks-given">0</span></div>
         <div class="stat-row"><span class="stat-label">Skunks reçus</span><span class="stat-value" id="stat-dan-skunks-received">0</span></div>
+        <div class="stat-row"><span class="stat-label">Nibs</span><span class="stat-value" id="stat-dan-nibs">0</span></div>
         <div class="stat-row"><span class="stat-label">Série actuelle</span><span class="stat-value" id="stat-dan-streak">0</span></div>
         <div class="stat-row"><span class="stat-label">Meilleure série</span><span class="stat-value" id="stat-dan-best-streak">0</span></div>
         <div class="stat-row"><span class="stat-label">Record tour</span><span class="stat-value" id="stat-dan-ever-best" style="color:var(--gold);">—</span></div>
@@ -855,6 +856,7 @@
         <div class="stat-row"><span class="stat-label">Défaites</span><span class="stat-value" id="stat-gen-losses">0</span></div>
         <div class="stat-row"><span class="stat-label">Skunks infligés</span><span class="stat-value" id="stat-gen-skunks-given">0</span></div>
         <div class="stat-row"><span class="stat-label">Skunks reçus</span><span class="stat-value" id="stat-gen-skunks-received">0</span></div>
+        <div class="stat-row"><span class="stat-label">Nibs</span><span class="stat-value" id="stat-gen-nibs">0</span></div>
         <div class="stat-row"><span class="stat-label">Série actuelle</span><span class="stat-value" id="stat-gen-streak">0</span></div>
         <div class="stat-row"><span class="stat-label">Meilleure série</span><span class="stat-value" id="stat-gen-best-streak">0</span></div>
         <div class="stat-row"><span class="stat-label">Record tour</span><span class="stat-value" id="stat-gen-ever-best" style="color:var(--gold);">—</span></div>
@@ -863,7 +865,10 @@
       </div>
     </div>
     <div class="past-games">
-      <div class="past-games-title">Parties enregistrées</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div class="past-games-title" style="margin-bottom:0;">Parties enregistrées</div>
+        <button onclick="confirmClearStorage()" style="padding:4px 10px;background:transparent;border:1px solid #e05555;border-radius:8px;color:#e05555;font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.04em;text-transform:uppercase;">🗑 Clear</button>
+      </div>
       <div id="past-games-list"><div class="no-games">Aucune partie complétée.</div></div>
     </div>
   </div>
@@ -981,8 +986,8 @@ let state = {
 };
 
 let stats = {
-  dan: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0 },
-  gen: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0 },
+  dan: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
+  gen: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
   games: []
 };
 
@@ -1136,6 +1141,10 @@ function addNibs(player) {
   const after = state.scores[player];
   state.history.push({ player, pts: 2, phase: 'Nibs', before, after });
 
+  // Track nibs count in current game state (committed to stats at endGame)
+  if (!state.nibsCount) state.nibsCount = { dan: 0, gen: 0 };
+  state.nibsCount[player]++;
+
   if (2 > state.highScore[player]) state.highScore[player] = 2;
 
   const el = document.getElementById('score-'+player);
@@ -1197,7 +1206,24 @@ function openEditGame(idx) {
   document.getElementById('edit-hs-val').value = hsVal > 0 ? hsVal : '';
   updateEditHsSwitch();
 
+  // Crib switch
+  editCrib = g.initialDealer;
+  updateEditCribSwitch();
+
   document.getElementById('edit-game-modal').classList.add('show');
+}
+
+function toggleEditCrib() {
+  editCrib = editCrib === 'dan' ? 'gen' : 'dan';
+  updateEditCribSwitch();
+}
+
+function updateEditCribSwitch() {
+  const btn = document.getElementById('edit-crib-switch');
+  const name = editCrib === 'dan' ? (state.danName || 'Dan') : (state.genName || 'Gen');
+  btn.textContent = name + ' ⇄';
+  btn.style.color = editCrib === 'dan' ? 'var(--dan)' : 'var(--gen)';
+  btn.style.borderColor = editCrib === 'dan' ? 'var(--dan)' : 'var(--gen)';
 }
 
 function toggleEditHsPlayer() {
@@ -1249,6 +1275,24 @@ function saveEditGame() {
   g.highScoreDan = (_editHsPlayer === 'dan' && hsVal > 50) ? hsVal : null;
   g.highScoreGen = (_editHsPlayer === 'gen' && hsVal > 50) ? hsVal : null;
 
+  // Save crib
+  g.initialDealer = editCrib;
+
+  recalcEverBest();
+  saveStats();
+  renderStats();
+  closeModal('edit-game-modal');
+}
+
+function deleteGame() {
+  if (editGameIdx === null) return;
+  const g = stats.games[editGameIdx];
+  // Revert stats
+  stats[g.winner].wins--;
+  stats[g.loser].losses--;
+  if (g.skunk) { stats[g.winner].skunksGiven--; stats[g.loser].skunksReceived--; }
+  stats.games.splice(editGameIdx, 1);
+  recalcStreaks();
   recalcEverBest();
   saveStats();
   renderStats();
@@ -1330,6 +1374,12 @@ function endGame(winner) {
   stats[loser].streak = 0;
   if (stats[winner].streak > stats[winner].bestStreak) stats[winner].bestStreak = stats[winner].streak;
 
+  // Commit nibs count
+  if (state.nibsCount) {
+    stats.dan.nibs = (stats.dan.nibs || 0) + (state.nibsCount.dan || 0);
+    stats.gen.nibs = (stats.gen.nibs || 0) + (state.nibsCount.gen || 0);
+  }
+
   // In turn mode, auto-save high scores (only if > 50); board mode: entered manually
   const autoHsDan = (state.gameMode === 'turn' && state.highScore.dan > 50) ? state.highScore.dan : null;
   const autoHsGen = (state.gameMode === 'turn' && state.highScore.gen > 50) ? state.highScore.gen : null;
@@ -1410,6 +1460,7 @@ function startNewGame() {
     danName: state.danName,
     genName: state.genName,
     highScore: { dan: 0, gen: 0 },
+    nibsCount: { dan: 0, gen: 0 },
     gameMode: state.gameMode || 'board'
   };
   document.querySelectorAll('.phase-btn').forEach((b,i) => b.classList.toggle('active', i===0));
@@ -1419,6 +1470,25 @@ function startNewGame() {
 
 function showResetConfirm() {
   document.getElementById('reset-modal').classList.add('show');
+}
+
+function confirmClearStorage() {
+  if (!confirm('Effacer toutes les données locales? Cette action est irréversible.')) return;
+  localStorage.removeItem('crib-stats-v2');
+  localStorage.removeItem('crib-state-v2');
+  stats = {
+    dan: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
+    gen: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
+    games: []
+  };
+  state = {
+    scores: { dan:0, gen:0 }, dealer:'dan', initialDealer:'dan',
+    phase:'Jeu', history:[], gameActive:true,
+    danName: state.danName, genName: state.genName,
+    highScore: { dan:0, gen:0 }, nibsCount: { dan:0, gen:0 },
+    gameMode: state.gameMode || 'board'
+  };
+  render();
 }
 
 function resetAll() {
@@ -1433,6 +1503,7 @@ function resetAll() {
     phase:'Jeu', history:[], gameActive:true,
     danName: state.danName, genName: state.genName,
     highScore: { dan: 0, gen: 0 },
+    nibsCount: { dan: 0, gen: 0 },
     gameMode: state.gameMode || 'board'
   };
   saveState();
@@ -1562,6 +1633,7 @@ function renderStats() {
     document.getElementById('stat-'+p+'-losses').textContent        = s.losses;
     document.getElementById('stat-'+p+'-skunks-given').textContent  = s.skunksGiven;
     document.getElementById('stat-'+p+'-skunks-received').textContent = s.skunksReceived;
+    document.getElementById('stat-'+p+'-nibs').textContent           = s.nibs || 0;
     document.getElementById('stat-'+p+'-streak').textContent        = s.streak;
     document.getElementById('stat-'+p+'-best-streak').textContent   = s.bestStreak;
     document.getElementById('stat-'+p+'-ever-best').textContent     = s.everBest ? s.everBest + ' pts' : '—';
@@ -1824,6 +1896,9 @@ init();
       </div>
     </div>
 
+    <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">♣ Crib initial</div>
+    <button id="edit-crib-switch" onclick="toggleEditCrib()" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;margin-bottom:16px;"></button>
+
     <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">⚡ High score (optionnel, &gt; 50)</div>
     <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
       <button id="edit-hs-switch" onclick="toggleEditHsPlayer()" style="padding:7px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-family:'Inter',sans-serif;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;"></button>
@@ -1834,6 +1909,7 @@ init();
 
     <button class="modal-btn primary" onclick="saveEditGame()">Enregistrer</button>
     <button class="modal-btn secondary" onclick="closeModal('edit-game-modal')">Annuler</button>
+    <button class="modal-btn" style="background:transparent;border:1px solid #e05555;color:#e05555;margin-top:4px;" onclick="deleteGame()">🗑 Supprimer cette partie</button>
   </div>
 </div>
 </body>
