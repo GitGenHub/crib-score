@@ -995,22 +995,22 @@ let newGameCribChoice = 'dan';
 // ─────────────────────────────────────────
 //  STORAGE
 // ─────────────────────────────────────────
-async function saveStats() {
-  try { await window.storage.set('crib-stats-v2', JSON.stringify(stats)); } catch(e){}
+function saveStats() {
+  try { localStorage.setItem('crib-stats-v2', JSON.stringify(stats)); } catch(e){}
 }
-async function loadStats() {
+function loadStats() {
   try {
-    const r = await window.storage.get('crib-stats-v2');
-    if (r && r.value) stats = JSON.parse(r.value);
+    const r = localStorage.getItem('crib-stats-v2');
+    if (r) stats = JSON.parse(r);
   } catch(e){}
 }
-async function saveState() {
-  try { await window.storage.set('crib-state-v2', JSON.stringify(state)); } catch(e){}
+function saveState() {
+  try { localStorage.setItem('crib-state-v2', JSON.stringify(state)); } catch(e){}
 }
-async function loadState() {
+function loadState() {
   try {
-    const r = await window.storage.get('crib-state-v2');
-    if (r && r.value) state = JSON.parse(r.value);
+    const r = localStorage.getItem('crib-state-v2');
+    if (r) state = JSON.parse(r);
   } catch(e){}
 }
 
@@ -1627,9 +1627,9 @@ function renderStats() {
 //  INIT
 // ─────────────────────────────────────────
 
-async function init() {
-  await loadStats();
-  await loadState();
+function init() {
+  loadStats();
+  loadState();
   if (!state.danName) state.danName = 'Dan';
   if (!state.genName) state.genName = 'Gen';
   render();
