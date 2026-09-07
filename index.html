@@ -903,6 +903,7 @@
         <div class="stat-row"><span class="stat-label">Meilleure série</span><span class="stat-value" id="stat-dan-best-streak">0</span></div>
         <div class="stat-row"><span class="stat-label">Record tour</span><span class="stat-value" id="stat-dan-ever-best" style="color:var(--gold);">—</span></div>
         <div class="stat-row"><span class="stat-label">Taux de victoire</span><span class="stat-value" id="stat-dan-winrate">—</span></div>
+        <div class="stat-row"><span class="stat-label">Victoire avec crib</span><span class="stat-value" id="stat-dan-crib-winrate">—</span></div>
         <div class="stat-row"><span class="stat-label">10 dernières</span><span class="stat-value" id="stat-dan-last10">—</span></div>
       </div>
       <div class="stat-card gen">
@@ -916,6 +917,7 @@
         <div class="stat-row"><span class="stat-label">Meilleure série</span><span class="stat-value" id="stat-gen-best-streak">0</span></div>
         <div class="stat-row"><span class="stat-label">Record tour</span><span class="stat-value" id="stat-gen-ever-best" style="color:var(--gold);">—</span></div>
         <div class="stat-row"><span class="stat-label">Taux de victoire</span><span class="stat-value" id="stat-gen-winrate">—</span></div>
+        <div class="stat-row"><span class="stat-label">Victoire avec crib</span><span class="stat-value" id="stat-gen-crib-winrate">—</span></div>
         <div class="stat-row"><span class="stat-label">10 dernières</span><span class="stat-value" id="stat-gen-last10">—</span></div>
       </div>
     </div>
@@ -1781,6 +1783,13 @@ function renderStats() {
     const totalGames = s.wins + s.losses;
     const winRate = totalGames > 0 ? Math.round((s.wins / totalGames) * 100) : null;
     document.getElementById('stat-'+p+'-winrate').textContent = winRate !== null ? winRate + ' %' : '—';
+
+    // Win rate when this player had the crib at start of game
+    const cribGames = stats.games.filter(g => g.initialDealer === p);
+    const cribWins  = cribGames.filter(g => g.winner === p).length;
+    const cribRate  = cribGames.length > 0 ? Math.round((cribWins / cribGames.length) * 100) : null;
+    document.getElementById('stat-'+p+'-crib-winrate').textContent =
+      cribRate !== null ? cribRate + '% (' + cribWins + '/' + cribGames.length + ')' : '—';
 
     // Last 10 wins
     const last10 = stats.games.slice(-10);
