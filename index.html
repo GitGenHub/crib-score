@@ -463,7 +463,7 @@
 
   .stats-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 10px;
     margin-bottom: 16px;
   }
@@ -492,10 +492,10 @@
   }
   .stat-card.dan .s-name { color: var(--dan); }
   .stat-card.gen .s-name { color: var(--gen); }
-  .stat-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; gap: 10px; }
   .stat-row:last-child { margin-bottom: 0; }
-  .stat-label { font-size: 0.68rem; color: var(--muted); }
-  .stat-value { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+  .stat-label { font-size: 0.72rem; color: var(--muted); }
+  .stat-value { font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; }
   .stat-value.big { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 900; }
   .stat-card.dan .stat-value.big { color: var(--dan); }
   .stat-card.gen .stat-value.big { color: var(--gen); }
