@@ -920,9 +920,14 @@
       </div>
     </div>
     <div class="past-games">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
         <div class="past-games-title" style="margin-bottom:0;">Parties enregistrées</div>
-        <button onclick="confirmClearStorage()" style="padding:4px 10px;background:transparent;border:1px solid #e05555;border-radius:8px;color:#e05555;font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.04em;text-transform:uppercase;">🗑 Clear</button>
+        <div style="display:flex;gap:6px;">
+          <button onclick="exportData()" title="Exporter les données" style="padding:4px 9px;background:transparent;border:1px solid var(--gold);border-radius:8px;color:var(--gold);font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;">📤 Exporter</button>
+          <button onclick="document.getElementById('import-file-input').click()" title="Importer des données" style="padding:4px 9px;background:transparent;border:1px solid var(--gen);border-radius:8px;color:var(--gen);font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;">📥 Importer</button>
+          <input type="file" id="import-file-input" accept="application/json,.json" style="display:none;" onchange="importData(event)">
+          <button onclick="confirmClearStorage()" style="padding:4px 9px;background:transparent;border:1px solid #e05555;border-radius:8px;color:#e05555;font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;">🗑 Clear</button>
+        </div>
       </div>
       <div id="past-games-list"><div class="no-games">Aucune partie complétée.</div></div>
     </div>
@@ -1535,6 +1540,76 @@ function showResetConfirm() {
   document.getElementById('reset-modal').classList.add('show');
 }
 
+
+// ─── EXPORT / IMPORT (JSON backup) ───
+function exportData() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    version: 2,
+    stats: stats,
+    state: {
+      danName: state.danName,
+      genName: state.genName,
+      gameMode: state.gameMode
+    }
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `crib-backup-${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const payload = JSON.parse(e.target.result);
+      if (!payload.stats || !payload.stats.games) {
+        alert('Fichier invalide — structure de données non reconnue.');
+        return;
+      }
+
+      const gameCount = payload.stats.games.length;
+      const confirmMsg = `Importer ${gameCount} partie(s)?\n\nCeci REMPLACERA toutes les données actuelles (stats et historique). Cette action est irréversible.`;
+      if (!confirm(confirmMsg)) return;
+
+      // Restore stats
+      stats = payload.stats;
+      // Ensure structure completeness (in case of older exports)
+      ['dan','gen'].forEach(p => {
+        stats[p] = Object.assign({
+          wins:0, losses:0, skunksGiven:0, skunksReceived:0,
+          streak:0, bestStreak:0, everBest:0, nibs:0
+        }, stats[p]);
+      });
+
+      // Restore player names if present
+      if (payload.state) {
+        if (payload.state.danName) state.danName = payload.state.danName;
+        if (payload.state.genName) state.genName = payload.state.genName;
+        if (payload.state.gameMode) state.gameMode = payload.state.gameMode;
+      }
+
+      saveStats();
+      saveState();
+      render();
+      document.getElementById('import-file-input').value = '';
+      alert('✓ Importation réussie — ' + gameCount + ' partie(s) restaurée(s).');
+    } catch (err) {
+      alert('Erreur de lecture du fichier : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
 function confirmClearStorage() {
   if (!confirm('Effacer toutes les données locales? Cette action est irréversible.')) return;
   localStorage.removeItem('crib-stats-v2');
