@@ -461,44 +461,57 @@
   }
   .stats-header p { font-size: 0.78rem; color: var(--muted); }
 
-  .stats-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  .stat-card {
+  .stats-compare {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 14px 12px;
-    position: relative;
+    padding: 12px 10px;
+    margin-bottom: 16px;
   }
-  .stat-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    border-radius: 12px 12px 0 0;
+  .compare-header {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1fr;
+    align-items: center;
+    padding-bottom: 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
   }
-  .stat-card.dan::before { background: var(--dan); }
-  .stat-card.gen::before { background: var(--gen); }
-  .stat-card .s-name {
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
+  .compare-name {
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 10px;
+    text-align: center;
   }
-  .stat-card.dan .s-name { color: var(--dan); }
-  .stat-card.gen .s-name { color: var(--gen); }
-  .stat-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; gap: 10px; }
-  .stat-row:last-child { margin-bottom: 0; }
-  .stat-label { font-size: 0.72rem; color: var(--muted); }
-  .stat-value { font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; }
-  .stat-value.big { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 900; }
-  .stat-card.dan .stat-value.big { color: var(--dan); }
-  .stat-card.gen .stat-value.big { color: var(--gen); }
+  .compare-name.dan { color: var(--dan); }
+  .compare-name.gen { color: var(--gen); }
+  .compare-row {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1fr;
+    align-items: center;
+    padding: 6px 0;
+    gap: 4px;
+  }
+  .compare-label {
+    font-size: 0.66rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.25;
+  }
+  .compare-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .compare-val.dan { color: var(--dan); }
+  .compare-val.gen { color: var(--gen); }
+  .compare-val.big { font-family: 'Playfair Display', serif; font-size: 1.7rem; font-weight: 900; }
+  .compare-val.gold { color: var(--gold) !important; }
+  .compare-val.small { font-size: 0.72rem; }
 
   .past-games {
     background: var(--surface);
@@ -891,34 +904,67 @@
       <h2>Statistiques</h2>
       <p id="stats-total-games">0 parties jouées</p>
     </div>
-    <div class="stats-grid">
-      <div class="stat-card dan">
-        <div class="s-name" id="sname-dan">Dan</div>
-        <div class="stat-row"><span class="stat-label">Victoires</span><span class="stat-value big" id="stat-dan-wins">0</span></div>
-        <div class="stat-row"><span class="stat-label">Défaites</span><span class="stat-value" id="stat-dan-losses">0</span></div>
-        <div class="stat-row"><span class="stat-label">Skunks infligés</span><span class="stat-value" id="stat-dan-skunks-given">0</span></div>
-        <div class="stat-row"><span class="stat-label">Skunks reçus</span><span class="stat-value" id="stat-dan-skunks-received">0</span></div>
-        <div class="stat-row"><span class="stat-label">Nibs</span><span class="stat-value" id="stat-dan-nibs">0</span></div>
-        <div class="stat-row"><span class="stat-label">Série actuelle</span><span class="stat-value" id="stat-dan-streak">0</span></div>
-        <div class="stat-row"><span class="stat-label">Meilleure série</span><span class="stat-value" id="stat-dan-best-streak">0</span></div>
-        <div class="stat-row"><span class="stat-label">Record tour</span><span class="stat-value" id="stat-dan-ever-best" style="color:var(--gold);">—</span></div>
-        <div class="stat-row"><span class="stat-label">Taux de victoire</span><span class="stat-value" id="stat-dan-winrate">—</span></div>
-        <div class="stat-row"><span class="stat-label">Victoire avec crib</span><span class="stat-value" id="stat-dan-crib-winrate">—</span></div>
-        <div class="stat-row"><span class="stat-label">10 dernières</span><span class="stat-value" id="stat-dan-last10">—</span></div>
+    <div class="stats-compare">
+      <div class="compare-header">
+        <div class="compare-name dan" id="sname-dan">Dan</div>
+        <div class="compare-name-label"></div>
+        <div class="compare-name gen" id="sname-gen">Gen</div>
       </div>
-      <div class="stat-card gen">
-        <div class="s-name" id="sname-gen">Gen</div>
-        <div class="stat-row"><span class="stat-label">Victoires</span><span class="stat-value big" id="stat-gen-wins">0</span></div>
-        <div class="stat-row"><span class="stat-label">Défaites</span><span class="stat-value" id="stat-gen-losses">0</span></div>
-        <div class="stat-row"><span class="stat-label">Skunks infligés</span><span class="stat-value" id="stat-gen-skunks-given">0</span></div>
-        <div class="stat-row"><span class="stat-label">Skunks reçus</span><span class="stat-value" id="stat-gen-skunks-received">0</span></div>
-        <div class="stat-row"><span class="stat-label">Nibs</span><span class="stat-value" id="stat-gen-nibs">0</span></div>
-        <div class="stat-row"><span class="stat-label">Série actuelle</span><span class="stat-value" id="stat-gen-streak">0</span></div>
-        <div class="stat-row"><span class="stat-label">Meilleure série</span><span class="stat-value" id="stat-gen-best-streak">0</span></div>
-        <div class="stat-row"><span class="stat-label">Record tour</span><span class="stat-value" id="stat-gen-ever-best" style="color:var(--gold);">—</span></div>
-        <div class="stat-row"><span class="stat-label">Taux de victoire</span><span class="stat-value" id="stat-gen-winrate">—</span></div>
-        <div class="stat-row"><span class="stat-label">Victoire avec crib</span><span class="stat-value" id="stat-gen-crib-winrate">—</span></div>
-        <div class="stat-row"><span class="stat-label">10 dernières</span><span class="stat-value" id="stat-gen-last10">—</span></div>
+
+      <div class="compare-row">
+        <span class="compare-val dan big" id="stat-dan-wins">0</span>
+        <span class="compare-label">Victoires</span>
+        <span class="compare-val gen big" id="stat-gen-wins">0</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan" id="stat-dan-losses">0</span>
+        <span class="compare-label">Défaites</span>
+        <span class="compare-val gen" id="stat-gen-losses">0</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan" id="stat-dan-skunks-given">0</span>
+        <span class="compare-label">Skunks infligés</span>
+        <span class="compare-val gen" id="stat-gen-skunks-given">0</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan" id="stat-dan-skunks-received">0</span>
+        <span class="compare-label">Skunks reçus</span>
+        <span class="compare-val gen" id="stat-gen-skunks-received">0</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan" id="stat-dan-nibs">0</span>
+        <span class="compare-label">Nibs</span>
+        <span class="compare-val gen" id="stat-gen-nibs">0</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan" id="stat-dan-streak">0</span>
+        <span class="compare-label">Série actuelle</span>
+        <span class="compare-val gen" id="stat-gen-streak">0</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan" id="stat-dan-best-streak">0</span>
+        <span class="compare-label">Meilleure série</span>
+        <span class="compare-val gen" id="stat-gen-best-streak">0</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan gold" id="stat-dan-ever-best">—</span>
+        <span class="compare-label">Record tour</span>
+        <span class="compare-val gen gold" id="stat-gen-ever-best">—</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan" id="stat-dan-winrate">—</span>
+        <span class="compare-label">Taux de victoire</span>
+        <span class="compare-val gen" id="stat-gen-winrate">—</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan small" id="stat-dan-crib-winrate">—</span>
+        <span class="compare-label">Victoire avec crib</span>
+        <span class="compare-val gen small" id="stat-gen-crib-winrate">—</span>
+      </div>
+      <div class="compare-row">
+        <span class="compare-val dan small" id="stat-dan-last10">—</span>
+        <span class="compare-label">10 dernières</span>
+        <span class="compare-val gen small" id="stat-gen-last10">—</span>
       </div>
     </div>
     <div class="past-games">
