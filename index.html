@@ -42,10 +42,8 @@
 
   /* ── HEADER ── */
   header {
-    position: fixed;
+    position: sticky;
     top: 0;
-    left: 0;
-    right: 0;
     z-index: 100;
     width: 100%;
     background: var(--surface);
@@ -54,9 +52,6 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    -webkit-transform: translate3d(0,0,0);
-    transform: translate3d(0,0,0);
-    will-change: transform;
   }
   header h1 {
     font-family: 'Playfair Display', serif;
@@ -218,9 +213,24 @@
     font-size: 4rem;
     font-weight: 900;
     line-height: 1;
+    transition: font-size 0.2s;
   }
   .score-card.dan .score-number { color: var(--dan); }
   .score-card.gen .score-number { color: var(--gen); }
+
+  /* Enlarged score cards for Mode Light (no phase/history clutter) */
+  .score-cards.light-size .score-card {
+    padding: 28px 14px 22px;
+  }
+  .score-cards.light-size .score-number {
+    font-size: 5.5rem;
+  }
+  .score-cards.light-size .player-name {
+    font-size: 0.85rem;
+  }
+  .score-cards.light-size .score-to-go {
+    font-size: 0.82rem;
+  }
 
   /* Pending preview: shows typed digits above the score */
   .pending-pts {
@@ -811,18 +821,13 @@
 
   /* ── STICKY NAV ── */
   .sticky-nav {
-    position: fixed;
-    top: 53px;   /* header height */
-    left: 0;
-    right: 0;
+    position: sticky;
+    top: 0;
     z-index: 99;
     background: var(--bg);
     padding: 8px 16px 0;
     display: flex;
     justify-content: center;
-    -webkit-transform: translate3d(0,0,0);
-    transform: translate3d(0,0,0);
-    will-change: transform;
   }
   .tabs {
     display: flex;
@@ -832,9 +837,8 @@
     width: 100%;
     max-width: 480px;
   }
-  /* Push main content below fixed header + tabs */
   .main {
-    margin-top: 110px;  /* header ~53px + tabs ~48px + gap */
+    margin-top: 8px;
   }
 </style>
 </head>
@@ -1517,18 +1521,21 @@ function setGameMode(mode) {
   const lb = document.getElementById('toggle-label');
   const phaseRow = document.getElementById('phase-row');
   const historyLog = document.getElementById('history-log');
+  const scoreCards = document.querySelector('.score-cards');
   if (mode === 'turn') {
     sw.classList.add('full');
     lb.textContent = 'Full';
     lb.style.color = 'var(--gen)';
     if (phaseRow) phaseRow.classList.remove('hidden');
     if (historyLog) historyLog.classList.remove('hidden');
+    if (scoreCards) scoreCards.classList.remove('light-size');
   } else {
     sw.classList.remove('full');
     lb.textContent = 'Light';
     lb.style.color = 'var(--dan)';
     if (phaseRow) phaseRow.classList.add('hidden');
     if (historyLog) historyLog.classList.add('hidden');
+    if (scoreCards) scoreCards.classList.add('light-size');
   }
   saveState();
 }
@@ -1983,11 +1990,6 @@ function init() {
     });
   });
 
-  // iOS Safari sometimes fails to paint position:fixed elements on first
-  // load until a scroll event fires. Force a tiny scroll nudge to trigger
-  // a repaint so the header/nav show up immediately.
-  window.scrollTo(0, 1);
-  setTimeout(() => window.scrollTo(0, 0), 50);
 }
 
 init();
