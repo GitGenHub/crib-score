@@ -1338,6 +1338,12 @@ function openEditGame(idx) {
   document.getElementById('edit-score-label-dan').textContent = state.danName || 'Dan';
   document.getElementById('edit-score-label-gen').textContent = state.genName || 'Gen';
 
+  // Nibs
+  document.getElementById('edit-nibs-dan').value = g.nibsDan || 0;
+  document.getElementById('edit-nibs-gen').value = g.nibsGen || 0;
+  document.getElementById('edit-nibs-label-dan').textContent = state.danName || 'Dan';
+  document.getElementById('edit-nibs-label-gen').textContent = state.genName || 'Gen';
+
   // HS switch
   const hsDan = g.highScoreDan || 0;
   const hsGen = g.highScoreGen || 0;
@@ -1417,6 +1423,13 @@ function saveEditGame() {
 
   // Save crib
   g.initialDealer = editCrib;
+
+  // Update nibs (oublié = forgotten during play, entered here after the fact)
+  const nibsDanVal = parseInt(document.getElementById('edit-nibs-dan').value, 10);
+  const nibsGenVal = parseInt(document.getElementById('edit-nibs-gen').value, 10);
+  g.nibsDan = isNaN(nibsDanVal) || nibsDanVal < 0 ? 0 : nibsDanVal;
+  g.nibsGen = isNaN(nibsGenVal) || nibsGenVal < 0 ? 0 : nibsGenVal;
+  recalcNibs();
 
   recalcEverBest();
   saveStats();
@@ -2133,6 +2146,22 @@ init();
 
     <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">♣ Crib initial</div>
     <button id="edit-crib-switch" onclick="toggleEditCrib()" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;margin-bottom:16px;"></button>
+
+    <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Nibs oubliés</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div>
+        <div id="edit-nibs-label-dan" style="font-size:0.7rem;font-weight:700;color:var(--dan);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Dan</div>
+        <input id="edit-nibs-dan" type="number" min="0" max="20" placeholder="0"
+          style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:900;text-align:center;outline:none;"/>
+      </div>
+      <div>
+        <div id="edit-nibs-label-gen" style="font-size:0.7rem;font-weight:700;color:var(--gen);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Gen</div>
+        <input id="edit-nibs-gen" type="number" min="0" max="20" placeholder="0"
+          style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:900;text-align:center;outline:none;"/>
+      </div>
+    </div>
 
     <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">⚡ High score (optionnel, &gt; 50)</div>
     <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
