@@ -1434,6 +1434,7 @@ function deleteGame() {
   stats.games.splice(editGameIdx, 1);
   recalcStreaks();
   recalcEverBest();
+  recalcNibs();
   saveStats();
   renderStats();
   closeModal('edit-game-modal');
@@ -1448,6 +1449,15 @@ function recalcStreaks() {
     stats[w].streak++;
     stats[l].streak = 0;
     if (stats[w].streak > stats[w].bestStreak) stats[w].bestStreak = stats[w].streak;
+  }
+}
+
+function recalcNibs() {
+  stats.dan.nibs = 0;
+  stats.gen.nibs = 0;
+  for (const g of stats.games) {
+    stats.dan.nibs += g.nibsDan || 0;
+    stats.gen.nibs += g.nibsGen || 0;
   }
 }
 
@@ -1514,11 +1524,7 @@ function endGame(winner) {
   stats[loser].streak = 0;
   if (stats[winner].streak > stats[winner].bestStreak) stats[winner].bestStreak = stats[winner].streak;
 
-  // Commit nibs count
-  if (state.nibsCount) {
-    stats.dan.nibs = (stats.dan.nibs || 0) + (state.nibsCount.dan || 0);
-    stats.gen.nibs = (stats.gen.nibs || 0) + (state.nibsCount.gen || 0);
-  }
+  // Nibs total is recalculated from stats.games after push (see below)
 
   // In turn mode, auto-save high scores (only if > 50); board mode: entered manually
   const autoHsDan = (state.gameMode === 'turn' && state.highScore.dan > 50) ? state.highScore.dan : null;
@@ -1534,9 +1540,12 @@ function endGame(winner) {
     initialDealer: state.initialDealer,
     date: new Date().toISOString(),
     highScoreDan: autoHsDan,
-    highScoreGen: autoHsGen
+    highScoreGen: autoHsGen,
+    nibsDan: (state.nibsCount && state.nibsCount.dan) || 0,
+    nibsGen: (state.nibsCount && state.nibsCount.gen) || 0
   });
 
+  recalcNibs();
   saveStats();
   render();
 
