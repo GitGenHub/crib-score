@@ -54,6 +54,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    -webkit-transform: translate3d(0,0,0);
+    transform: translate3d(0,0,0);
+    will-change: transform;
   }
   header h1 {
     font-family: 'Playfair Display', serif;
@@ -817,6 +820,9 @@
     padding: 8px 16px 0;
     display: flex;
     justify-content: center;
+    -webkit-transform: translate3d(0,0,0);
+    transform: translate3d(0,0,0);
+    will-change: transform;
   }
   .tabs {
     display: flex;
@@ -881,7 +887,7 @@
     </div>
 
     <!-- Phase tags -->
-    <div class="phase-row">
+    <div class="phase-row" id="phase-row">
       <button class="phase-btn active" onclick="selectPhase(this,'Jeu')">Jeu</button>
       <button class="phase-btn" onclick="selectPhase(this,'Main')">Main</button>
       <button class="phase-btn" onclick="selectPhase(this,'Crib')">Crib</button>
@@ -894,7 +900,7 @@
     </div>
 
     <!-- History log -->
-    <div class="history-log">
+    <div class="history-log" id="history-log">
       <div class="history-title">Historique de la partie</div>
       <div class="history-entries" id="history-entries">
         <div class="history-entry" style="justify-content:center;border:none;">
@@ -1421,7 +1427,7 @@ function saveEditGame() {
 
     g.winScore  = newWinner === 'dan' ? scoreDan : scoreGen;
     g.loseScore = newLoser  === 'dan' ? scoreDan : scoreGen;
-    g.skunk     = g.loseScore < SKUNK_LINE;
+    g.skunk     = g.loseScore <= SKUNK_LINE;
 
     if (g.skunk) { stats[newWinner].skunksGiven++; stats[newLoser].skunksReceived++; }
   }
@@ -1509,14 +1515,20 @@ function setGameMode(mode) {
   state.gameMode = mode;
   const sw = document.getElementById('toggle-switch');
   const lb = document.getElementById('toggle-label');
+  const phaseRow = document.getElementById('phase-row');
+  const historyLog = document.getElementById('history-log');
   if (mode === 'turn') {
     sw.classList.add('full');
     lb.textContent = 'Full';
     lb.style.color = 'var(--gen)';
+    if (phaseRow) phaseRow.classList.remove('hidden');
+    if (historyLog) historyLog.classList.remove('hidden');
   } else {
     sw.classList.remove('full');
     lb.textContent = 'Light';
     lb.style.color = 'var(--dan)';
+    if (phaseRow) phaseRow.classList.add('hidden');
+    if (historyLog) historyLog.classList.add('hidden');
   }
   saveState();
 }
@@ -1536,7 +1548,7 @@ function selectPhase(btn, phase) {
 function endGame(winner) {
   state.gameActive = false;
   const loser = winner === 'dan' ? 'gen' : 'dan';
-  const isSkunk = state.scores[loser] < SKUNK_LINE;
+  const isSkunk = state.scores[loser] <= SKUNK_LINE;
 
   stats[winner].wins++;
   stats[loser].losses++;
@@ -1831,7 +1843,7 @@ function render() {
     const toGo = Math.max(0, GOAL - scores[p]);
     document.getElementById('togo-'+p).textContent = toGo === 0 ? '🏆' : toGo + ' à faire';
     // Skunk warning: show for a player when opponent crossed skunk line but player hasn't
-    const danger = scores[opp] >= SKUNK_LINE && scores[p] < SKUNK_LINE && state.gameActive;
+    const danger = scores[opp] >= SKUNK_LINE && scores[p] <= SKUNK_LINE && state.gameActive;
     document.getElementById('skunk-'+p).classList.toggle('show', danger);
     document.getElementById('name-'+p).textContent = pName(p);
     const nc = (state.nibsCount && state.nibsCount[p]) || 0;
@@ -1970,6 +1982,12 @@ function init() {
       addNibs(player);
     });
   });
+
+  // iOS Safari sometimes fails to paint position:fixed elements on first
+  // load until a scroll event fires. Force a tiny scroll nudge to trigger
+  // a repaint so the header/nav show up immediately.
+  window.scrollTo(0, 1);
+  setTimeout(() => window.scrollTo(0, 0), 50);
 }
 
 init();
