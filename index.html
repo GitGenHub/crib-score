@@ -1933,6 +1933,12 @@ function init() {
   loadState();
   if (!state.danName) state.danName = 'Dan';
   if (!state.genName) state.genName = 'Gen';
+
+  // Recompute nibs totals from per-game history so old cumulative
+  // (pre-fix) counts never linger after a reload.
+  recalcNibs();
+  saveStats();
+
   render();
 
   // Wire nibs buttons here to avoid inline event issues
