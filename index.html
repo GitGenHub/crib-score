@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Crib Score</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600&display=swap');
@@ -31,11 +31,7 @@
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     padding-bottom: 60px;
-    padding-top: 0;
     /* prevent iOS bounce ruining layout when numpad is visible */
     overscroll-behavior: none;
   }
@@ -293,7 +289,11 @@
   /* Fixed at bottom, slides in/out */
   .numpad-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100vh;
+    height: 100dvh;   /* tracks Chrome's dynamic toolbar correctly */
     z-index: 50;
     pointer-events: none;
   }
@@ -314,7 +314,7 @@
     background: var(--surface);
     border-top: 1px solid var(--border);
     border-radius: 18px 18px 0 0;
-    padding: 14px 16px 32px;
+    padding: 14px 16px calc(32px + env(safe-area-inset-bottom, 0px));
     transform: translateY(100%);
     transition: transform 0.28s cubic-bezier(0.32,0.72,0,1);
     max-width: 480px;
@@ -828,6 +828,7 @@
     padding: 8px 16px 0;
     display: flex;
     justify-content: center;
+    width: 100%;
   }
   .tabs {
     display: flex;
@@ -838,7 +839,8 @@
     max-width: 480px;
   }
   .main {
-    margin-top: 8px;
+    margin: 8px auto 0;
+    max-width: 480px;
   }
 </style>
 </head>
