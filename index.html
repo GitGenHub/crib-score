@@ -1341,8 +1341,6 @@ function openEditGame(idx) {
   // Nibs
   document.getElementById('edit-nibs-dan').value = g.nibsDan || 0;
   document.getElementById('edit-nibs-gen').value = g.nibsGen || 0;
-  document.getElementById('edit-nibs-label-dan').textContent = state.danName || 'Dan';
-  document.getElementById('edit-nibs-label-gen').textContent = state.genName || 'Gen';
 
   // HS switch
   const hsDan = g.highScoreDan || 0;
@@ -2134,34 +2132,24 @@ init();
         <div id="edit-score-label-dan" style="font-size:0.7rem;font-weight:700;color:var(--dan);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Dan</div>
         <input id="edit-score-dan" type="number" min="0" max="121" placeholder="pts"
           style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--dan);border-radius:8px;
-                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:900;text-align:center;outline:none;"/>
+                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:900;text-align:center;outline:none;margin-bottom:6px;"/>
+        <input id="edit-nibs-dan" type="number" min="0" max="20" placeholder="Nibs"
+          style="width:100%;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+                 color:var(--muted);font-family:'Inter',sans-serif;font-size:0.75rem;font-weight:600;text-align:center;outline:none;"/>
       </div>
       <div>
         <div id="edit-score-label-gen" style="font-size:0.7rem;font-weight:700;color:var(--gen);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Gen</div>
         <input id="edit-score-gen" type="number" min="0" max="121" placeholder="pts"
           style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--gen);border-radius:8px;
-                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:900;text-align:center;outline:none;"/>
+                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:900;text-align:center;outline:none;margin-bottom:6px;"/>
+        <input id="edit-nibs-gen" type="number" min="0" max="20" placeholder="Nibs"
+          style="width:100%;padding:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+                 color:var(--muted);font-family:'Inter',sans-serif;font-size:0.75rem;font-weight:600;text-align:center;outline:none;"/>
       </div>
     </div>
 
     <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">♣ Crib initial</div>
     <button id="edit-crib-switch" onclick="toggleEditCrib()" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;margin-bottom:16px;"></button>
-
-    <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Nibs oubliés</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-      <div>
-        <div id="edit-nibs-label-dan" style="font-size:0.7rem;font-weight:700;color:var(--dan);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Dan</div>
-        <input id="edit-nibs-dan" type="number" min="0" max="20" placeholder="0"
-          style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:900;text-align:center;outline:none;"/>
-      </div>
-      <div>
-        <div id="edit-nibs-label-gen" style="font-size:0.7rem;font-weight:700;color:var(--gen);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Gen</div>
-        <input id="edit-nibs-gen" type="number" min="0" max="20" placeholder="0"
-          style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-                 color:var(--text);font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:900;text-align:center;outline:none;"/>
-      </div>
-    </div>
 
     <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">⚡ High score (optionnel, &gt; 50)</div>
     <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
