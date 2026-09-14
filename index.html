@@ -56,6 +56,44 @@
     letter-spacing: 0.06em;
     color: #f0ece4;
   }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sync-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--surface2);
+    min-width: 66px;
+    text-align: center;
+  }
+  .sync-badge.online {
+    color: #7fd28e;
+    border-color: #2f6e3f;
+    background: rgba(46, 114, 65, 0.14);
+  }
+  .sync-badge.offline {
+    color: #e05555;
+    border-color: #7a2e2e;
+    background: rgba(122, 46, 46, 0.2);
+  }
+  .sync-badge.pending {
+    color: var(--gold);
+    border-color: #7d6731;
+    background: rgba(201, 168, 76, 0.14);
+  }
+  .sync-badge.syncing {
+    color: #78b9ff;
+    border-color: #295f9f;
+    background: rgba(41, 95, 159, 0.18);
+  }
   .stats-header-btn {
     padding: 7px 14px;
     background: var(--surface2);
@@ -847,7 +885,10 @@
 
 <header>
   <h1 onclick="document.getElementById('combos-modal').classList.add('show')" style="cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;" title="Top 10 mains"><span style="color:#e05555;">♥</span><span style="color:#f0ece4;">♠</span><span style="color:#f0ece4;"> CRIB </span><span style="color:#f0ece4;">♣</span><span style="color:#e05555;">♦</span></h1>
-  <button class="stats-header-btn" onclick="showTab('stats')" id="stats-toggle-btn">📊 Stats</button>
+  <div class="header-right">
+    <div class="sync-badge offline" id="sync-badge">Offline</div>
+    <button class="stats-header-btn" onclick="showTab('stats')" id="stats-toggle-btn">📊 Stats</button>
+  </div>
 </header>
 
 <div class="main">
@@ -1123,11 +1164,23 @@ let numpadBuffer = '';     // digits typed
 
 let newGameCribChoice = 'dan';
 
+const SYNC_QUEUE_KEY = 'crib-sync-queue-v2';
+let syncStatus = {
+  online: false,
+  inFlight: false,
+  timer: null,
+  pending: 0,
+  lastError: ''
+};
+let suppressSyncQueue = false;
+
 // ─────────────────────────────────────────
 //  STORAGE
 // ─────────────────────────────────────────
 function saveStats() {
   try { localStorage.setItem('crib-stats-v2', JSON.stringify(stats)); } catch(e){}
+  if (suppressSyncQueue) return;
+  queueSync('saveStats');
 }
 function loadStats() {
   try {
@@ -1137,12 +1190,231 @@ function loadStats() {
 }
 function saveState() {
   try { localStorage.setItem('crib-state-v2', JSON.stringify(state)); } catch(e){}
+  if (suppressSyncQueue) return;
+  queueSync('saveState');
 }
 function loadState() {
   try {
     const r = localStorage.getItem('crib-state-v2');
     if (r) state = JSON.parse(r);
   } catch(e){}
+}
+
+function createClientGameId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+  return 'cg-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function ensureClientGameIds() {
+  if (!stats.games || !Array.isArray(stats.games)) return false;
+  let changed = false;
+  stats.games.forEach((g, idx) => {
+    if (!g.clientGameId) {
+      const base = [
+        g.date || '',
+        g.winner || '',
+        g.loser || '',
+        g.winScore || '',
+        g.loseScore || '',
+        g.initialDealer || '',
+        idx
+      ].join('|');
+      g.clientGameId = 'legacy-' + hashString(base);
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function loadSyncQueue() {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    if (!raw) return { pendingGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.pendingGameIds)) {
+      return { pendingGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
+    }
+    if (typeof parsed.stateDirty !== 'boolean') parsed.stateDirty = false;
+    return parsed;
+  } catch (e) {
+    return { pendingGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
+  }
+}
+
+function saveSyncQueue(payload) {
+  try {
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(payload));
+    syncStatus.pending = Array.isArray(payload.pendingGameIds) ? payload.pendingGameIds.length : 0;
+    updateSyncBadge();
+  } catch (e) {}
+}
+
+function getAllGameIds() {
+  if (!Array.isArray(stats.games)) return [];
+  return stats.games.map(g => g.clientGameId).filter(Boolean);
+}
+
+function extractSyncState() {
+  return {
+    danName: state.danName,
+    genName: state.genName,
+    gameMode: state.gameMode
+  };
+}
+
+function queueGameIds(ids, source) {
+  const queue = loadSyncQueue();
+  const next = new Set(queue.pendingGameIds || []);
+  (ids || []).forEach(id => {
+    if (id) next.add(id);
+  });
+  queue.pendingGameIds = Array.from(next);
+  queue.stateDirty = true;
+  queue.queuedAt = new Date().toISOString();
+  queue.source = source || queue.source || 'client';
+  saveSyncQueue(queue);
+}
+
+function queueSync(source) {
+  queueGameIds(getAllGameIds(), source || 'client');
+  scheduleSync(300);
+}
+
+function scheduleSync(delayMs) {
+  if (syncStatus.timer) clearTimeout(syncStatus.timer);
+  syncStatus.timer = setTimeout(() => { flushSyncQueue(); }, delayMs || 0);
+}
+
+async function checkServerHealth() {
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' });
+    if (!res.ok) return false;
+    const payload = await res.json();
+    return payload && payload.status === 'ok';
+  } catch (e) {
+    return false;
+  }
+}
+
+function updateSyncBadge() {
+  const el = document.getElementById('sync-badge');
+  if (!el) return;
+
+  if (syncStatus.inFlight) {
+    el.textContent = 'Sync...';
+    el.className = 'sync-badge syncing';
+    return;
+  }
+  if (!syncStatus.online) {
+    el.textContent = 'Offline';
+    el.className = 'sync-badge offline';
+    return;
+  }
+  if (syncStatus.pending > 0) {
+    el.textContent = 'Queue ' + syncStatus.pending;
+    el.className = 'sync-badge pending';
+    return;
+  }
+  el.textContent = 'Online';
+  el.className = 'sync-badge online';
+}
+
+function applyServerSnapshot(snapshot) {
+  if (!snapshot || !snapshot.stats || !snapshot.stats.games) return;
+  stats = snapshot.stats;
+  if (snapshot.state) {
+    state.danName = snapshot.state.danName || state.danName;
+    state.genName = snapshot.state.genName || state.genName;
+    state.gameMode = snapshot.state.gameMode || state.gameMode;
+  }
+  ensureClientGameIds();
+  recalcNibs();
+
+  suppressSyncQueue = true;
+  try {
+    localStorage.setItem('crib-stats-v2', JSON.stringify(stats));
+    localStorage.setItem('crib-state-v2', JSON.stringify(state));
+    render();
+  } catch (e) {}
+  suppressSyncQueue = false;
+}
+
+async function fetchServerSnapshotIfNeeded() {
+  const hasLocalGames = Array.isArray(stats.games) && stats.games.length > 0;
+  if (hasLocalGames) return;
+  try {
+    const res = await fetch('/api/snapshot', { cache: 'no-store' });
+    if (!res.ok) return;
+    const payload = await res.json();
+    if (!payload || !payload.ok) return;
+    applyServerSnapshot(payload);
+  } catch (e) {}
+}
+
+function findGamesByIds(ids) {
+  const map = new Map((stats.games || []).map(g => [g.clientGameId, g]));
+  return (ids || []).map(id => map.get(id)).filter(Boolean);
+}
+
+async function flushSyncQueue() {
+  if (syncStatus.inFlight) return;
+  const queue = loadSyncQueue();
+  const games = findGamesByIds(queue.pendingGameIds || []);
+  if (games.length === 0 && !queue.stateDirty) {
+    syncStatus.pending = 0;
+    updateSyncBadge();
+    return;
+  }
+
+  syncStatus.inFlight = true;
+  updateSyncBadge();
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        games,
+        state: queue.stateDirty ? extractSyncState() : null,
+        queuedAt: queue.queuedAt || new Date().toISOString(),
+        source: queue.source || 'client'
+      })
+    });
+    if (!res.ok) throw new Error('sync failed');
+    await res.json();
+    localStorage.removeItem(SYNC_QUEUE_KEY);
+    syncStatus.online = true;
+    syncStatus.pending = 0;
+    syncStatus.lastError = '';
+  } catch (e) {
+    syncStatus.online = false;
+    syncStatus.lastError = e && e.message ? e.message : 'sync error';
+    scheduleSync(5000);
+  } finally {
+    syncStatus.inFlight = false;
+    updateSyncBadge();
+  }
+}
+
+async function bootstrapSync() {
+  syncStatus.pending = loadSyncQueue().pendingGameIds.length;
+  updateSyncBadge();
+  syncStatus.online = await checkServerHealth();
+  updateSyncBadge();
+  if (syncStatus.online) {
+    await fetchServerSnapshotIfNeeded();
+    scheduleSync(150);
+  }
 }
 
 // ─────────────────────────────────────────
@@ -1574,6 +1846,7 @@ function endGame(winner) {
   if (autoHsGen && autoHsGen > (stats.gen.everBest || 0)) stats.gen.everBest = autoHsGen;
 
   stats.games.push({
+    clientGameId: createClientGameId(),
     winner, loser,
     winScore: state.scores[winner],
     loseScore: state.scores[loser],
@@ -1706,6 +1979,7 @@ function importData(event) {
 
       // Restore stats
       stats = payload.stats;
+      ensureClientGameIds();
       // Ensure structure completeness (in case of older exports)
       ['dan','gen'].forEach(p => {
         stats[p] = Object.assign({
@@ -1736,6 +2010,7 @@ function confirmClearStorage() {
   if (!confirm('Effacer toutes les données locales? Cette action est irréversible.')) return;
   localStorage.removeItem('crib-stats-v2');
   localStorage.removeItem('crib-state-v2');
+  localStorage.removeItem(SYNC_QUEUE_KEY);
   stats = {
     dan: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
     gen: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
@@ -1753,8 +2028,8 @@ function confirmClearStorage() {
 
 function resetAll() {
   stats = {
-    dan: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0 },
-    gen: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0 },
+    dan: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
+    gen: { wins:0, losses:0, skunksGiven:0, skunksReceived:0, streak:0, bestStreak:0, everBest:0, nibs:0 },
     games: []
   };
   saveStats();
@@ -1972,6 +2247,7 @@ function renderStats() {
 function init() {
   loadStats();
   loadState();
+  ensureClientGameIds();
   if (!state.danName) state.danName = 'Dan';
   if (!state.genName) state.genName = 'Gen';
 
@@ -1990,6 +2266,17 @@ function init() {
       addNibs(player);
     });
   });
+
+  window.addEventListener('online', () => {
+    syncStatus.online = true;
+    updateSyncBadge();
+    scheduleSync(120);
+  });
+  window.addEventListener('offline', () => {
+    syncStatus.online = false;
+    updateSyncBadge();
+  });
+  bootstrapSync();
 
 }
 

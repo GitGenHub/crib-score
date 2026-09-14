@@ -1,0 +1,18 @@
+[Unit]
+Description=Crib Score API (FastAPI + SQLite)
+After=network.target
+
+[Service]
+Type=simple
+User=nginx
+Group=nginx
+WorkingDirectory=/opt/crib-score/backend
+ExecStart=/opt/crib-score/venv/bin/python -m uvicorn app:app --app-dir /opt/crib-score/backend --host 127.0.0.1 --port 8002 --workers 1
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
