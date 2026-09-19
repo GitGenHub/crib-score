@@ -1033,6 +1033,7 @@
           <button onclick="exportData()" title="Exporter les données" style="padding:4px 9px;background:transparent;border:1px solid var(--gold);border-radius:8px;color:var(--gold);font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;">📤 Exporter</button>
           <button onclick="document.getElementById('import-file-input').click()" title="Importer des données" style="padding:4px 9px;background:transparent;border:1px solid var(--gen);border-radius:8px;color:var(--gen);font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;">📥 Importer</button>
           <input type="file" id="import-file-input" accept="application/json,.json" style="display:none;" onchange="importData(event)">
+          <button onclick="refreshDb()" title="Rafraichir depuis la base serveur" style="padding:4px 9px;background:transparent;border:1px solid #78b9ff;border-radius:8px;color:#78b9ff;font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;">🔄 Refresh db</button>
           <button onclick="confirmClearStorage()" style="padding:4px 9px;background:transparent;border:1px solid #e05555;border-radius:8px;color:#e05555;font-family:'Inter',sans-serif;font-size:0.65rem;font-weight:700;cursor:pointer;">🗑 Clear</button>
         </div>
       </div>
@@ -2006,6 +2007,35 @@ function importData(event) {
   };
   reader.readAsText(file);
 }
+
+async function refreshDb() {
+  const confirmMsg = 'Refresh local data from server database now?\n\nThis will replace your current local stats/history and clear pending local sync queue.';
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch('/api/snapshot', { cache: 'no-store' });
+    if (!res.ok) throw new Error('snapshot fetch failed');
+    const payload = await res.json();
+    if (!payload || !payload.ok || !payload.stats || !Array.isArray(payload.stats.games)) {
+      throw new Error('invalid snapshot');
+    }
+
+    localStorage.removeItem(SYNC_QUEUE_KEY);
+    syncStatus.pending = 0;
+    applyServerSnapshot(payload);
+    syncStatus.online = true;
+    syncStatus.lastError = '';
+    updateSyncBadge();
+
+    alert('✓ Refreshed from DB — ' + payload.stats.games.length + ' game(s) loaded.');
+  } catch (e) {
+    syncStatus.online = false;
+    syncStatus.lastError = e && e.message ? e.message : 'refresh error';
+    updateSyncBadge();
+    alert('Refresh failed: ' + syncStatus.lastError);
+  }
+}
+
 function confirmClearStorage() {
   if (!confirm('Effacer toutes les données locales? Cette action est irréversible.')) return;
   localStorage.removeItem('crib-stats-v2');
