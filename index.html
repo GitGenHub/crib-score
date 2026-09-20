@@ -879,6 +879,19 @@
     margin: 8px auto 0;
     max-width: 480px;
   }
+  .app-version {
+    margin: 14px auto 2px;
+    text-align: center;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    opacity: 0.72;
+    padding: 2px 8px;
+    pointer-events: none;
+    user-select: none;
+  }
 </style>
 </head>
 <body>
@@ -1039,6 +1052,7 @@
       </div>
       <div id="past-games-list"><div class="no-games">Aucune partie complétée.</div></div>
     </div>
+    <div class="app-version" id="app-version"></div>
   </div>
 
 </div><!-- /main -->
@@ -1134,6 +1148,7 @@
 // ─────────────────────────────────────────
 //  CONSTANTS
 // ─────────────────────────────────────────
+const APP_VERSION = '1.7.0';
 const GOAL = 121;
 const SKUNK_LINE = 75;
 
@@ -1170,6 +1185,7 @@ let syncStatus = {
   online: false,
   inFlight: false,
   timer: null,
+  healthTimer: null,
   pending: 0,
   lastError: ''
 };
@@ -1234,6 +1250,10 @@ function ensureClientGameIds() {
       g.clientGameId = 'legacy-' + hashString(base);
       changed = true;
     }
+    if (!g.updatedAt) {
+      g.updatedAt = g.date || new Date().toISOString();
+      changed = true;
+    }
   });
   return changed;
 }
@@ -1241,22 +1261,25 @@ function ensureClientGameIds() {
 function loadSyncQueue() {
   try {
     const raw = localStorage.getItem(SYNC_QUEUE_KEY);
-    if (!raw) return { pendingGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
+    if (!raw) return { pendingGameIds: [], deletedGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.pendingGameIds)) {
-      return { pendingGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
+      return { pendingGameIds: [], deletedGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
     }
+    if (!Array.isArray(parsed.deletedGameIds)) parsed.deletedGameIds = [];
     if (typeof parsed.stateDirty !== 'boolean') parsed.stateDirty = false;
     return parsed;
   } catch (e) {
-    return { pendingGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
+    return { pendingGameIds: [], deletedGameIds: [], stateDirty: false, queuedAt: null, source: 'client' };
   }
 }
 
 function saveSyncQueue(payload) {
   try {
     localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(payload));
-    syncStatus.pending = Array.isArray(payload.pendingGameIds) ? payload.pendingGameIds.length : 0;
+    const pendingGames = Array.isArray(payload.pendingGameIds) ? payload.pendingGameIds.length : 0;
+    const pendingDeletes = Array.isArray(payload.deletedGameIds) ? payload.deletedGameIds.length : 0;
+    syncStatus.pending = pendingGames + pendingDeletes;
     updateSyncBadge();
   } catch (e) {}
 }
@@ -1287,6 +1310,19 @@ function queueGameIds(ids, source) {
   saveSyncQueue(queue);
 }
 
+function queueDeletedGameId(gameId, source) {
+  if (!gameId) return;
+  const queue = loadSyncQueue();
+  const nextDeletes = new Set(queue.deletedGameIds || []);
+  nextDeletes.add(gameId);
+  queue.deletedGameIds = Array.from(nextDeletes);
+  queue.pendingGameIds = (queue.pendingGameIds || []).filter(id => id !== gameId);
+  queue.stateDirty = true;
+  queue.queuedAt = new Date().toISOString();
+  queue.source = source || queue.source || 'client';
+  saveSyncQueue(queue);
+}
+
 function queueSync(source) {
   queueGameIds(getAllGameIds(), source || 'client');
   scheduleSync(300);
@@ -1297,12 +1333,34 @@ function scheduleSync(delayMs) {
   syncStatus.timer = setTimeout(() => { flushSyncQueue(); }, delayMs || 0);
 }
 
+function startHealthMonitor() {
+  if (syncStatus.healthTimer) return;
+  syncStatus.healthTimer = setInterval(async () => {
+    if (syncStatus.inFlight) return;
+    const wasOnline = syncStatus.online;
+    const isOnline = await checkServerHealth();
+    syncStatus.online = isOnline;
+    if (isOnline && !wasOnline) {
+      await reconcileFromServer();
+    } else {
+      updateSyncBadge();
+    }
+  }, 10000);
+}
+
+function cleanupLegacyServiceWorkers() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.getRegistrations()
+    .then(regs => Promise.all(regs.map(reg => reg.unregister())))
+    .catch(() => {});
+}
+
 async function checkServerHealth() {
   try {
     const res = await fetch('/api/health', { cache: 'no-store' });
     if (!res.ok) return false;
     const payload = await res.json();
-    return payload && payload.status === 'ok';
+    return !!(payload && (payload.status === 'ok' || payload.ok === true));
   } catch (e) {
     return false;
   }
@@ -1351,9 +1409,7 @@ function applyServerSnapshot(snapshot) {
   suppressSyncQueue = false;
 }
 
-async function fetchServerSnapshotIfNeeded() {
-  const hasLocalGames = Array.isArray(stats.games) && stats.games.length > 0;
-  if (hasLocalGames) return;
+async function fetchServerSnapshot() {
   try {
     const res = await fetch('/api/snapshot', { cache: 'no-store' });
     if (!res.ok) return;
@@ -1369,13 +1425,14 @@ function findGamesByIds(ids) {
 }
 
 async function flushSyncQueue() {
-  if (syncStatus.inFlight) return;
+  if (syncStatus.inFlight) return false;
   const queue = loadSyncQueue();
   const games = findGamesByIds(queue.pendingGameIds || []);
-  if (games.length === 0 && !queue.stateDirty) {
+  const deletedGameIds = Array.isArray(queue.deletedGameIds) ? queue.deletedGameIds.filter(Boolean) : [];
+  if (games.length === 0 && deletedGameIds.length === 0 && !queue.stateDirty) {
     syncStatus.pending = 0;
     updateSyncBadge();
-    return;
+    return true;
   }
 
   syncStatus.inFlight = true;
@@ -1386,6 +1443,7 @@ async function flushSyncQueue() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         games,
+        deletedGameIds,
         state: queue.stateDirty ? extractSyncState() : null,
         queuedAt: queue.queuedAt || new Date().toISOString(),
         source: queue.source || 'client'
@@ -1397,24 +1455,35 @@ async function flushSyncQueue() {
     syncStatus.online = true;
     syncStatus.pending = 0;
     syncStatus.lastError = '';
+    return true;
   } catch (e) {
-    syncStatus.online = false;
+    // Distinguish true offline from sync endpoint/schema errors.
+    syncStatus.online = await checkServerHealth();
     syncStatus.lastError = e && e.message ? e.message : 'sync error';
     scheduleSync(5000);
+    return false;
   } finally {
     syncStatus.inFlight = false;
     updateSyncBadge();
   }
 }
 
+async function reconcileFromServer() {
+  const pushOk = await flushSyncQueue();
+  if (!pushOk) return;
+  await fetchServerSnapshot();
+  syncStatus.online = true;
+  updateSyncBadge();
+}
+
 async function bootstrapSync() {
-  syncStatus.pending = loadSyncQueue().pendingGameIds.length;
+  const q = loadSyncQueue();
+  syncStatus.pending = (q.pendingGameIds || []).length + (q.deletedGameIds || []).length;
   updateSyncBadge();
   syncStatus.online = await checkServerHealth();
   updateSyncBadge();
   if (syncStatus.online) {
-    await fetchServerSnapshotIfNeeded();
-    scheduleSync(150);
+    await reconcileFromServer();
   }
 }
 
@@ -1714,6 +1783,7 @@ function saveEditGame() {
   const hsVal = parseInt(document.getElementById('edit-hs-val').value, 10);
   g.highScoreDan = (_editHsPlayer === 'dan' && hsVal > 50) ? hsVal : null;
   g.highScoreGen = (_editHsPlayer === 'gen' && hsVal > 50) ? hsVal : null;
+  g.updatedAt = new Date().toISOString();
 
   // Save crib
   g.initialDealer = editCrib;
@@ -1732,6 +1802,7 @@ function saveEditGame() {
 function deleteGame() {
   if (editGameIdx === null) return;
   const g = stats.games[editGameIdx];
+  const deletedGameId = g && g.clientGameId ? g.clientGameId : null;
   // Revert stats
   stats[g.winner].wins--;
   stats[g.loser].losses--;
@@ -1741,6 +1812,11 @@ function deleteGame() {
   recalcEverBest();
   recalcNibs();
   saveStats();
+  // Preserve current integrity behavior: only persist deletion to DB when delete happened online.
+  if (deletedGameId && syncStatus.online) {
+    queueDeletedGameId(deletedGameId, 'deleteGameOnline');
+    scheduleSync(100);
+  }
   renderStats();
   closeModal('edit-game-modal');
 }
@@ -1848,6 +1924,7 @@ function endGame(winner) {
 
   stats.games.push({
     clientGameId: createClientGameId(),
+    updatedAt: new Date().toISOString(),
     winner, loser,
     winScore: state.scores[winner],
     loseScore: state.scores[loser],
@@ -2275,16 +2352,24 @@ function renderStats() {
 // ─────────────────────────────────────────
 
 function init() {
+  const versionEl = document.getElementById('app-version');
+  if (versionEl) versionEl.textContent = 'Version ' + APP_VERSION;
+  cleanupLegacyServiceWorkers();
   loadStats();
   loadState();
-  ensureClientGameIds();
+  const localMutated = ensureClientGameIds();
   if (!state.danName) state.danName = 'Dan';
   if (!state.genName) state.genName = 'Gen';
 
   // Recompute nibs totals from per-game history so old cumulative
   // (pre-fix) counts never linger after a reload.
   recalcNibs();
-  saveStats();
+  if (localMutated) {
+    suppressSyncQueue = true;
+    saveStats();
+    saveState();
+    suppressSyncQueue = false;
+  }
 
   render();
 
@@ -2300,17 +2385,18 @@ function init() {
   window.addEventListener('online', () => {
     syncStatus.online = true;
     updateSyncBadge();
-    scheduleSync(120);
+    reconcileFromServer();
   });
   window.addEventListener('offline', () => {
     syncStatus.online = false;
     updateSyncBadge();
   });
+  startHealthMonitor();
   bootstrapSync();
 
 }
 
-init();
+window.addEventListener('DOMContentLoaded', init);
 
 // ── Robust viewport height tracking for Chrome's dynamic toolbar ──
 // Keeps --app-height in sync with the ACTUAL visible viewport (not the

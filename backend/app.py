@@ -69,6 +69,7 @@ class SnapshotPayload(BaseModel):
 class SyncPayload(BaseModel):
     model_config = ConfigDict(extra="allow")
     games: list[dict[str, Any]] = Field(default_factory=list)
+    deletedGameIds: list[str] = Field(default_factory=list)
     state: dict[str, Any] | None = None
     queuedAt: str | None = None
     source: str | None = Field(default="client")
@@ -144,6 +145,13 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS state_store (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS deleted_games (
+                client_game_id TEXT PRIMARY KEY,
+                deleted_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
@@ -242,6 +250,7 @@ def normalize_game(g: dict[str, Any], fallback_idx: int) -> dict[str, Any]:
 
     win_score = int(g.get("winScore", 0) or 0)
     lose_score = int(g.get("loseScore", 0) or 0)
+    updated_at = g.get("updatedAt") or g.get("date") or now_iso()
 
     return {
         "clientGameId": str(client_game_id),
@@ -257,12 +266,13 @@ def normalize_game(g: dict[str, Any], fallback_idx: int) -> dict[str, Any]:
         "hsPlayer": g.get("hsPlayer") if g.get("hsPlayer") in ("dan", "gen") else None,
         "nibsDan": int(g.get("nibsDan", 0) or 0),
         "nibsGen": int(g.get("nibsGen", 0) or 0),
+        "updatedAt": str(updated_at),
     }
 
 
-def upsert_games(conn: sqlite3.Connection, games: list[dict[str, Any]]) -> int:
+def upsert_games(conn: sqlite3.Connection, games: list[dict[str, Any]]) -> tuple[int, int]:
     if not games:
-        return 0
+        return 0, 0
 
     sql = """
     INSERT INTO games (
@@ -284,11 +294,30 @@ def upsert_games(conn: sqlite3.Connection, games: list[dict[str, Any]]) -> int:
         nibs_dan = excluded.nibs_dan,
         nibs_gen = excluded.nibs_gen,
         updated_at = excluded.updated_at
+    WHERE
+        games.updated_at IS NULL
+        OR games.updated_at = ''
+        OR excluded.updated_at >= games.updated_at
     """
 
-    count = 0
-    for idx, raw in enumerate(games):
-        g = normalize_game(raw, idx)
+    normalized = [normalize_game(raw, idx) for idx, raw in enumerate(games)]
+    candidate_ids = [g["clientGameId"] for g in normalized]
+
+    tombstoned_ids: set[str] = set()
+    if candidate_ids:
+        placeholders = ",".join(["?"] * len(candidate_ids))
+        rows = conn.execute(
+            f"SELECT client_game_id FROM deleted_games WHERE client_game_id IN ({placeholders})",
+            tuple(candidate_ids),
+        ).fetchall()
+        tombstoned_ids = {str(r["client_game_id"]) for r in rows}
+
+    accepted = 0
+    rejected_tombstones = 0
+    for g in normalized:
+        if g["clientGameId"] in tombstoned_ids:
+            rejected_tombstones += 1
+            continue
         ts = now_iso()
         conn.execute(
             sql,
@@ -307,12 +336,40 @@ def upsert_games(conn: sqlite3.Connection, games: list[dict[str, Any]]) -> int:
                 g["nibsDan"],
                 g["nibsGen"],
                 ts,
-                ts,
+                g["updatedAt"],
             ),
         )
-        count += 1
+        accepted += 1
 
-    return count
+    return accepted, rejected_tombstones
+
+
+def delete_games(conn: sqlite3.Connection, deleted_ids: list[str]) -> int:
+    if not deleted_ids:
+        return 0
+
+    clean_ids = sorted({str(x).strip() for x in deleted_ids if str(x).strip()})
+    if not clean_ids:
+        return 0
+
+    ts = now_iso()
+    conn.executemany(
+        """
+        INSERT INTO deleted_games(client_game_id, deleted_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(client_game_id) DO UPDATE SET
+            deleted_at = excluded.deleted_at,
+            updated_at = excluded.updated_at
+        """,
+        [(game_id, ts, ts, ts) for game_id in clean_ids],
+    )
+
+    placeholders = ",".join(["?"] * len(clean_ids))
+    conn.execute(
+        f"DELETE FROM games WHERE client_game_id IN ({placeholders})",
+        tuple(clean_ids),
+    )
+    return len(clean_ids)
 
 
 def list_games() -> list[dict[str, Any]]:
@@ -321,7 +378,7 @@ def list_games() -> list[dict[str, Any]]:
             """
             SELECT client_game_id, winner, loser, win_score, lose_score, skunk,
                    initial_dealer, played_at, high_score_dan, high_score_gen,
-                   hs_player, nibs_dan, nibs_gen
+                     hs_player, nibs_dan, nibs_gen, updated_at
             FROM games
             ORDER BY played_at ASC, id ASC
             """
@@ -342,6 +399,7 @@ def list_games() -> list[dict[str, Any]]:
             "hsPlayer": r["hs_player"],
             "nibsDan": r["nibs_dan"],
             "nibsGen": r["nibs_gen"],
+            "updatedAt": r["updated_at"],
         }
         for r in rows
     ]
@@ -407,7 +465,7 @@ def build_snapshot() -> dict[str, Any]:
 def replace_all_games(games: list[dict[str, Any]]) -> int:
     with closing(get_connection()) as conn:
         conn.execute("DELETE FROM games")
-        inserted = upsert_games(conn, games)
+        inserted, _rejected = upsert_games(conn, games)
         conn.commit()
     return inserted
 
@@ -580,7 +638,8 @@ def put_snapshot(payload: SnapshotPayload) -> dict[str, Any]:
 @app.post("/api/sync")
 def post_sync(payload: SyncPayload) -> dict[str, Any]:
     with closing(get_connection()) as conn:
-        accepted = upsert_games(conn, payload.games or [])
+        accepted, rejected_tombstones = upsert_games(conn, payload.games or [])
+        deleted = delete_games(conn, payload.deletedGameIds or [])
         conn.commit()
 
     if isinstance(payload.state, dict):
@@ -590,6 +649,8 @@ def post_sync(payload: SyncPayload) -> dict[str, Any]:
     return {
         "ok": True,
         "acceptedGames": accepted,
+        "rejectedByTombstone": rejected_tombstones,
+        "deletedGames": deleted,
         "updatedAt": snap["updatedAt"],
         "source": payload.source or "client",
         "snapshot": {
